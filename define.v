@@ -1,0 +1,26 @@
+`define PID_WIDTH 4
+`define OUT_PID 4'b0001
+`define IN_PID 4'b1001
+`define SOF_PID 4'b0101
+`define SETUP_PID 4'b1101
+`define DATA0_PID 4'b0011
+`define DATA1_PID 4'b1011
+`define DATA2_PID 4'b0111
+`define MDATA_PID 4'b1111
+`define ACK_PID 4'b0010
+`define NAK_PID 4'b1010
+`define STALL_PID 4'b1110
+`define ADDR_WIDTH 7
+`define EP_WIDTH 4
+`define LS_CONTROL_WIDTH 8
+`define LS_INTERRUPT_WIDTH 8
+`define FS_CONTROL_WIDTH 64
+`define FS_INTERRUPT_WIDTH 64
+`define FS_BULK_WIDTH 64
+`define FS_ISOCH_WIDTH 1023
+`define SYNC_WIDTH 8
+`define SYNC_PATTERN 8'b01010100
+`define CNT_RX 6'd17
+`define CNT_TX	6'd14
+
+
