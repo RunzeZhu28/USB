@@ -22,5 +22,7 @@
 `define SYNC_PATTERN 8'b01010100
 `define CNT_RX 6'd17
 `define CNT_TX	6'd14
-
+`define STUFF_BIT_WIDTH 4'd6
+·define TOKEN_CRC_WIDTH 3'd5
+`define DATA_CRC_WIDTH 5'd16
 
