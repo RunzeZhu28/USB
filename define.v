@@ -19,7 +19,7 @@
 `define FS_BULK_WIDTH 64
 `define FS_ISOCH_WIDTH 1023
 `define SYNC_WIDTH 8
-`define SYNC_PATTERN 8'b01010100
+`define SYNC_PATTERN 8'b00101010
 `define CNT_RX 6'd17
 `define CNT_TX	6'd14
 `define STUFF_BIT_WIDTH 4'd6
