@@ -73,7 +73,97 @@ initial begin
   //stable J goto IDLE state 
   rx_dp <= 1'b1;
   rx_dn <= 1'b0;
-  repeat(`CNT_RX) @(posedge clk);	
+  repeat(`CNT_RX+1) @(posedge clk);	
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b1;
+  repeat(5) @(posedge clk);  //K
+  
+  rx_dp <= 1'b1;
+  rx_dn <= 1'b0;
+  repeat(3) @(posedge clk);  //J, check if unstable transmission will cause bit error
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b1;
+  repeat(2) @(posedge clk);  //J, check if unstable transmission will cause bit error
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b1;
+  repeat(5) @(posedge clk);  //K
+  
+  rx_dp <= 1'b1;
+  rx_dn <= 1'b0;
+  repeat(5) @(posedge clk);   //J
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b1;
+  repeat(5) @(posedge clk);  //K
+  
+  rx_dp <= 1'b1;
+  rx_dn <= 1'b0;
+  repeat(5) @(posedge clk);   //J
+  
+  rx_dp <= 1'b1;
+  rx_dn <= 1'b0;
+  repeat(1) @(posedge clk);  //K, check if unstable transmission will cause bit error
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b1;
+  repeat(4) @(posedge clk);  //K, check if unstable transmission will cause bit error
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b1;
+  repeat(5) @(posedge clk);  //k   later seems not correct for now. Should I still have clock fast and low??
+
+  
+  //rx_dp <= 1'b1;
+  //rx_dn <= 1'b1;
+  //repeat(5) @(posedge clk);  //check error
+  
+  rx_dp <= 1'b1;
+  rx_dn <= 1'b0;
+  repeat(30) @(posedge clk);  // 6 same bit, next should be stuff bit  111111  how do we determine first bit???
+  
+  //rx_dp <= 1'b1;
+  //rx_dn <= 1'b0;
+  //repeat(5) @(posedge clk);    //should be error
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b1;
+  repeat(5) @(posedge clk);   //stuff bit 0, rx_status should be 0
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b1;
+  repeat(15) @(posedge clk);   //000
+  
+  rx_dp <= 1'b1;
+  rx_dn <= 1'b0;
+  repeat(5) @(posedge clk);    //1
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b1;
+  repeat(5) @(posedge clk);     //0
+  
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b0;
+  repeat(5) @(posedge clk);     //SE0
+  
+  //rx_dp <= 1'b0;
+  //rx_dn <= 1'b1;
+  //repeat(5) @(posedge clk);     //should be error
+  
+  rx_dp <= 1'b0;
+  rx_dn <= 1'b0;
+  repeat(5) @(posedge clk);      //SE0
+  
+  rx_dp <= 1'b1;
+  rx_dn <= 1'b0;
+  repeat(5) @(posedge clk);     //J,EOP
+  
+  rx_dp <= 1'b1;
+  rx_dn <= 1'b0;
+  repeat(5) @(posedge clk);     //go back to idle
   $stop;
 end
 

@@ -89,7 +89,7 @@ always@(posedge clk or negedge rst_n) begin
 				if(!is_j) 
 					wait_cnt <= 6'b0;
 				
-				else if (wait_cnt < `CNT_RX)  //need to be stable for some time
+				else if (wait_cnt < `CNT_RX)  //need to be stable for some time: CNT_RX + 1 time, because will still check j at next period otherwise go to 0
 					wait_cnt <= wait_cnt + 1'b1;
 				
 				else begin
@@ -115,9 +115,9 @@ always@(posedge clk or negedge rst_n) begin
 			SYNC: begin
 				
 				if (clk_cnt == 0) begin
-					if (sync_bit <= 7) begin //clk cnt is 0 and should get a complete bit
+					if (sync_bit <= 7) begin //clk_cnt is 0 and should get a complete bit
 						if(dpv == SYNC_PATTERN[sync_bit] && dnv != SYNC_PATTERN[sync_bit]) begin
-							if(sync_bit == 7) begin
+							if(sync_bit == 7) begin  //8 bit, so 8-1 index here
 								state <= DATA;
 								clk_cnt <= 3'd4;
 								sync_bit <= 4'b0;
@@ -161,7 +161,7 @@ always@(posedge clk or negedge rst_n) begin
 					end
 					else if(dpv == lastdpv) begin
 						stuff_cnt <= stuff_cnt + 1;
-						if(stuff_cnt == `STUFF_BIT_WIDTH) //next bit is stuff bit, 6 consecutive 1 stuff a 0.
+						if(stuff_cnt == `STUFF_BIT_WIDTH-1 ) //next bit is stuff bit, 6 consecutive 1 stuff a 0. Already have five, this is the sixth
 							state <= STUFF;
 						else begin  //this bit is 1
 							rx_bit <= 1'b1;
