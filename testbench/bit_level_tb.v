@@ -122,11 +122,11 @@ initial begin
   
   rx_dp <= 1'b1;
   rx_dn <= 1'b0;
-  repeat(30) @(posedge clk);  // 6 same bit, next should be stuff bit  111111  how do we determine first bit???
+  repeat(35) @(posedge clk);  // 6 same bit, next should be stuff bit  0111111 
   
-  //rx_dp <= 1'b1;
-  //rx_dn <= 1'b0;
-  //repeat(5) @(posedge clk);    //should be error
+  rx_dp <= 1'b1;
+  rx_dn <= 1'b0;
+  repeat(5) @(posedge clk);    //should be error
   
   rx_dp <= 1'b0;
   rx_dn <= 1'b1;
@@ -134,11 +134,11 @@ initial begin
   
   rx_dp <= 1'b0;
   rx_dn <= 1'b1;
-  repeat(15) @(posedge clk);   //000
+  repeat(15) @(posedge clk);   //same as stuff bit so 111
   
   rx_dp <= 1'b1;
   rx_dn <= 1'b0;
-  repeat(5) @(posedge clk);    //1
+  repeat(5) @(posedge clk);    //0
   
   rx_dp <= 1'b0;
   rx_dn <= 1'b1;
