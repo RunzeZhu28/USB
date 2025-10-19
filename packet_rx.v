@@ -93,14 +93,14 @@ always@(posedge clk or negedge rst_n)
 						rx_packet_pid <= rx_packet_data[20:17];
 					end
 				end
-				else if (rx_packet_byte_cnt == 2'd2 && rx_packet_pid_valid && rx_packet_pid[1:0] == 2'b01) begin //in token packet,11 bits addr, need 2 bytes(include some crc bits)
+				if (rx_packet_byte_cnt == 2'd2 && rx_packet_pid_valid && rx_packet_pid[1:0] == 2'b01) begin //in token packet,11 bits addr, need 2 bytes(include some crc bits)
 						rx_packet_addr <= rx_packet_data[19:9];
 				end
-				else if (rx_packet_byte_cnt == 2'd3 && rx_packet_pid_valid && rx_packet_pid[1:0] == 2'b11) begin // in data packet, Delay 2 bytes from getting data because last 2 bytes are CRC16 which is not needed to send out.
+				if (rx_packet_byte_cnt == 2'd3 && rx_packet_pid_valid && rx_packet_pid[1:0] == 2'b11) begin // in data packet, Delay 2 bytes from getting data because last 2 bytes are CRC16 which is not needed to send out.
 					rx_packet_byte <= rx_packet_data[8:1];
 					rx_packet_byte_en <= 1'b1;
 				end
-				else if (rx_packet_byte_cnt != 2'd3) begin
+				if (rx_packet_byte_cnt != 2'd3) begin
 					rx_packet_byte_cnt <= rx_packet_byte_cnt + 1; // 2'd3 stays at 2'd3 for data
 				end
 			end 
