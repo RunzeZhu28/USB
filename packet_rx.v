@@ -6,7 +6,6 @@ input rx_finish, //1: RX finsh
 input rx_status, //1: have rx_bit
 input rx_bit,
 output reg [3:0] rx_packet_pid,
-output reg rx_packet_pid_valid,              //check if pid is valid
 output reg [10:0] rx_packet_addr,
 output reg [7:0] rx_packet_byte,  // for data packet
 output reg rx_packet_byte_en,     //when data packet data is valid
@@ -36,7 +35,7 @@ begin
 end
 endfunction
 
-
+reg rx_packet_pid_valid;              //check if pid is valid
 reg [23:0] rx_packet_data;  // For token: PID:8 + FrameNumber: 11 + CRC5 = 24 ， 3 bytes
 reg [1:0]  rx_packet_byte_cnt;  //  Need 3 byte
 reg [2:0] rx_cnt; // count to 8
