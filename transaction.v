@@ -4,7 +4,16 @@
 // |  [63:48]  |  [47:32]  |  [31:16]  |  [15:8]    |  [7]        |  [6:5]  |  [4:0]      |
 //--------------------------------------------------------------------------------------------------------
 `include "define.v"
-module transaction(
+module transaction #(
+    parameter             EP81_ISOCHRONOUS  = 0,                  // endpoint 81 is ISOCHRONOUS ?
+    parameter             EP82_ISOCHRONOUS  = 0,                  // endpoint 82 is ISOCHRONOUS ?
+    parameter             EP83_ISOCHRONOUS  = 0,                  // endpoint 83 is ISOCHRONOUS ?
+    parameter             EP84_ISOCHRONOUS  = 0,                  // endpoint 84 is ISOCHRONOUS ?
+    parameter             EP01_ISOCHRONOUS  = 0,                  // endpoint 01 is ISOCHRONOUS ?
+    parameter             EP02_ISOCHRONOUS  = 0,                  // endpoint 02 is ISOCHRONOUS ?
+    parameter             EP03_ISOCHRONOUS  = 0,                  // endpoint 03 is ISOCHRONOUS ?
+    parameter             EP04_ISOCHRONOUS  = 0                   // endpoint 04 is ISOCHRONOUS ?
+) (
 input 				 clk,
 input 				 rst_n,
 //rx
@@ -40,6 +49,8 @@ output reg         ep03_valid,
 // rx_packet_endpoint 0x04 data output
 output reg  [ 7:0] ep04_data,
 output reg         ep04_valid,
+output reg         rx_data_repetitive,  // if receive 2 consecutive 0 or 1, means previous ACK is not sent out properly and the host will send same data again        
+output reg         rx_isochronous_data_wrong, // if receive DATA 1, this data is wrong
 // tx_packet_endpoint 0x81 data input
 input  wire [ 7:0] ep81_data,      
 input  wire        ep81_valid,
@@ -67,6 +78,10 @@ reg ep81_data1;
 reg ep82_data1;
 reg ep83_data1;
 reg ep84_data1;
+reg ep01_data1;
+reg ep02_data1;
+reg ep03_data1;
+reg ep04_data1;
 
 wire [4:0] out_ep_valid = {ep84_valid, ep83_valid, ep82_valid, ep81_valid, 1'b1}; //Use this way to extract data is more convenient
 wire [7:0] out_ep_data [4:0];
@@ -79,8 +94,15 @@ assign out_ep_data[4] = ep84_data;
 //main control
 always@(posedge clk or negedge rst_n)
 	if(~rst_n) begin
-		endpoint <= 0;
+		endpoint   <= 0;
 		ep00_setup <= 0;
+		ep00_data1 <= 0;
+		ep01_data1 <= 0; // what the DATA should be now DATA0 or DATA1
+		ep02_data1 <= 0;
+	   ep03_data1 <= 0;
+		ep04_data1 <= 0;
+		rx_data_repetitive <= 0;
+		rx_isochronous_data_wrong <= 0;
 	end
 	else begin
 		if(rx_packet_fin && rx_packet_valid)  begin
@@ -88,7 +110,7 @@ always@(posedge clk or negedge rst_n)
 				endpoint   <= rx_packet_endpoint;
 				if (rx_packet_endpoint == 0) begin
 					ep00_setup <= 1'b1;
-					ep00_data1 <= 1'b1; //defined in spec, first data in data stage should be DATA1
+					ep00_data1 <= 1'b0; //defined in spec, next in data should be DATA0, and first data in (OUT/IN)data stage should be DATA1
 				end
 			end
 			else if (rx_packet_pid == `OUT_PID) begin
@@ -97,13 +119,92 @@ always@(posedge clk or negedge rst_n)
 					ep00_setup <= 1'b0; // We know this is control transfer and setup finished
 				end
 			end
+			else if (rx_packet_pid == `IN_PID) begin
+			end
+			else if (rx_packet_pid == `DATA0_PID || rx_packet_pid == `DATA1_PID) begin
+				tx_packet_start <= 1'b1;                                                                      
+            tx_packet_pid <= `ACK_PID;
+				if (endpoint == 0) begin // received in token packet, in data packet there is no EP
+					if((ep00_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep00_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
+						ep00_data1 <= ~ ep00_data1;
+					end
+					else begin
+						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
+					end
+				end
+				else if (endpoint == 4'd1) begin
+					if(EP01_ISOCHRONOUS) begin //it will not affect other transaction so other transaction's DATA0/DATA1 is not affected 
+						if(rx_packet_pid == `DATA0_PID) begin
+							tx_packet_start <= 1'b0; //No handshake in isochronous 
+						end
+						else if(rx_packet_pid == `DATA1_PID) begin
+							rx_isochronous_data_wrong <= 1; //isochronous should all be data0
+						end
+					end
+					else if((ep01_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep01_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
+						ep01_data1 <= ~ ep01_data1;
+					end
+					else begin
+						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
+					end
+				end
+				else if (endpoint == 4'd2) begin
+					if(EP02_ISOCHRONOUS) begin //it will not affect other transaction so other transaction's DATA0/DATA1 is not affected 
+						if(rx_packet_pid == `DATA0_PID) begin
+							tx_packet_start <= 1'b0; //No handshake in isochronous 
+						end
+						else if(rx_packet_pid == `DATA1_PID) begin
+							rx_isochronous_data_wrong <= 1; //isochronous should all be data0
+						end
+					end
+					else if((ep02_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep02_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
+						ep02_data1 <= ~ ep02_data1;
+					end
+					else begin
+						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
+					end
+				end
+				else if (endpoint == 4'd3 ) begin
+					if(EP03_ISOCHRONOUS) begin //it will not affect other transaction so other transaction's DATA0/DATA1 is not affected 
+						if(rx_packet_pid == `DATA0_PID) begin
+							tx_packet_start <= 1'b0; //No handshake in isochronous 
+						end
+						else if(rx_packet_pid == `DATA1_PID) begin
+							rx_isochronous_data_wrong <= 1; //isochronous should all be data0
+						end
+					end
+					else if((ep03_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep03_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
+						ep03_data1 <= ~ ep03_data1;
+					end
+					else begin
+						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
+					end
+				end
+				else if (endpoint == 4'd4) begin
+					if(EP04_ISOCHRONOUS) begin //it will not affect other transaction so other transaction's DATA0/DATA1 is not affected 
+						if(rx_packet_pid == `DATA0_PID) begin
+							tx_packet_start <= 1'b0; //No handshake in isochronous 
+						end
+						else if(rx_packet_pid == `DATA1_PID) begin
+							rx_isochronous_data_wrong <= 1; //isochronous should all be data0
+						end
+					end
+					else if((ep04_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep04_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
+						ep04_data1 <= ~ ep04_data1;
+					end
+					else begin
+						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
+					end
+				end
+			end
+		
 			else begin  //not finished tx
 			
 			end
 		end
 	end
 
-//RX out
+//RX out , also need to deal with if receive 2 consecutive DATA0 or DATA1
 always @ (posedge clk or negedge rst_n)
     if (~rst_n) begin
 		  ep00_setup_cmd <=64'h0;
