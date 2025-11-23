@@ -24,7 +24,7 @@ packet_rx u_packet_rx(
     .rx_status (rx_status), //1: have rx_bit
     .rx_bit    (rx_bit),
     .rx_packet_pid (rx_packet_pid),
-    .rx_packet_pid_valid (rx_packet_pid_valid),              //check if pid is valid
+//    .rx_packet_pid_valid (rx_packet_pid_valid),              //check if pid is valid
     .rx_packet_addr (rx_packet_addr),
     .rx_packet_byte (rx_packet_byte),  // for data packet
     .rx_packet_byte_en (rx_packet_byte_en),     //when data packet data is valid
