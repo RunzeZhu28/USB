@@ -5,6 +5,11 @@
 //--------------------------------------------------------------------------------------------------------
 `include "define.v"
 module transaction #(
+	 parameter       [7:0] EP00_MAXPACKETSIZE   = 8'd32,              // endpoint 00 (control endpoint) packet byte length.
+    parameter       [9:0] EP81_MAXPACKETSIZE   = 10'd32,             // endpoint 81 packet byte length. If it is a ISOCHRONOUS endpoint, MAXPACKETSIZE can up to 1023, otherwise MAXPACKETSIZE can only be 8, 16, 32, or 64.
+    parameter       [9:0] EP82_MAXPACKETSIZE   = 10'd32,             // endpoint 82 packet byte length. If it is a ISOCHRONOUS endpoint, MAXPACKETSIZE can up to 1023, otherwise MAXPACKETSIZE can only be 8, 16, 32, or 64.
+    parameter       [9:0] EP83_MAXPACKETSIZE   = 10'd32,             // endpoint 83 packet byte length. If it is a ISOCHRONOUS endpoint, MAXPACKETSIZE can up to 1023, otherwise MAXPACKETSIZE can only be 8, 16, 32, or 64.
+    parameter       [9:0] EP84_MAXPACKETSIZE   = 10'd32,             // endpoint 84 packet byte length. If it is a ISOCHRONOUS endpoint, MAXPACKETSIZE can up to 1023, otherwise MAXPACKETSIZE can only be 8, 16, 32, or 64.
     parameter             EP81_ISOCHRONOUS  = 0,                  // endpoint 81 is ISOCHRONOUS ?
     parameter             EP82_ISOCHRONOUS  = 0,                  // endpoint 82 is ISOCHRONOUS ?
     parameter             EP83_ISOCHRONOUS  = 0,                  // endpoint 83 is ISOCHRONOUS ?
@@ -23,6 +28,8 @@ input [7:0]  		 rx_packet_byte,
 input 		 		 rx_packet_byte_en,    
 input 		    	 rx_packet_valid,	
 input 		 		 rx_packet_fin,
+output reg         rx_data_repetitive,  // if receive 2 consecutive 0 or 1, means previous ACK is not sent out properly and the host will send same data again        
+output reg         rx_isochronous_data_wrong, // if receive DATA 1, this data is wrong
 //tx
 output reg         tx_packet_start,  	    // Start indicator of the tx_packet
 output reg  [ 3:0] tx_packet_pid,  		
@@ -34,7 +41,8 @@ output reg 			 sot,            // start of USB-transfer
 output reg 		 	 sof,            // start of USB-frame
 // rx_packet_endpointoint 0 is the special control rx_packet_endpointoint, bidirectional, MAY NEED MORE SIGNALS FOR EP00! ADD IT LATER!!
 output reg  [63:0] ep00_setup_cmd,
-
+output reg  [ 8:0] ep00_index,  //track ep00 IN progress
+input  wire [ 7:0] ep00_resp,  // user input
 //Support up to 15 rx_packet_endpoints in full speed. Use 4 here.
 //One direction out EP
 // rx_packet_endpoint 0x01 data output
@@ -49,8 +57,6 @@ output reg         ep03_valid,
 // rx_packet_endpoint 0x04 data output
 output reg  [ 7:0] ep04_data,
 output reg         ep04_valid,
-output reg         rx_data_repetitive,  // if receive 2 consecutive 0 or 1, means previous ACK is not sent out properly and the host will send same data again        
-output reg         rx_isochronous_data_wrong, // if receive DATA 1, this data is wrong
 // tx_packet_endpoint 0x81 data input
 input  wire [ 7:0] ep81_data,      
 input  wire        ep81_valid,
@@ -73,6 +79,7 @@ assign rx_packet_endpoint = rx_packet_addr[10:7];
 reg [3:0] endpoint; 
 reg [7:0] ep00_data;
 reg ep00_setup;
+reg [15:0] ep00_total; //wLength
 reg ep00_data1;  //DATA0/1
 reg ep81_data1;
 reg ep82_data1;
@@ -82,6 +89,7 @@ reg ep01_data1;
 reg ep02_data1;
 reg ep03_data1;
 reg ep04_data1;
+reg [9:0] tx_data_size;   // max is 10 bits for non-EP0 EP
 
 wire [4:0] out_ep_valid = {ep84_valid, ep83_valid, ep82_valid, ep81_valid, 1'b1}; //Use this way to extract data is more convenient
 wire [7:0] out_ep_data [4:0];
@@ -103,14 +111,17 @@ always@(posedge clk or negedge rst_n)
 		ep04_data1 <= 0;
 		rx_data_repetitive <= 0;
 		rx_isochronous_data_wrong <= 0;
+		ep00_index <= 0;
+		ep00_total <= 0;
+		tx_data_size     <= 0;
 	end
 	else begin
-		if(rx_packet_fin && rx_packet_valid)  begin
+		if(rx_packet_fin && rx_packet_valid)  begin  //indicate one rx packet is completed, can send TX
 			if (rx_packet_pid == `SETUP_PID) begin // control transfer
 				endpoint   <= rx_packet_endpoint;
 				if (rx_packet_endpoint == 0) begin
 					ep00_setup <= 1'b1;
-					ep00_data1 <= 1'b0; //defined in spec, next in data should be DATA0, and first data in (OUT/IN)data stage should be DATA1
+					ep00_data1 <= 1'b0; //defined in spec, next in data should be DATA0, and first data in (OUT/IN) data stage should be DATA1
 				end
 			end
 			else if (rx_packet_pid == `OUT_PID) begin
@@ -120,13 +131,59 @@ always@(posedge clk or negedge rst_n)
 				end
 			end
 			else if (rx_packet_pid == `IN_PID) begin
+				endpoint   <= rx_packet_endpoint;
+				tx_packet_start <= 1'b1;
+				tx_packet_pid <= `NAK_PID; // send NAK in default
+				if (rx_packet_endpoint == 0) begin
+					ep00_setup <= 1'b0; // We know setup finished
+					tx_packet_pid <= ep00_data1? `DATA1_PID: `DATA0_PID; //DATA0 OR DATA1 now
+					tx_data_size  <= 0;
+					if (ep00_total >= {8'b0,EP00_MAXPACKETSIZE}) begin  // cannot fit in one packet
+						tx_data_size <= {2'b0,EP00_MAXPACKETSIZE};  //ensure bit width same
+						ep00_total <= ep00_total - {8'b0,EP00_MAXPACKETSIZE};
+					end
+					else begin
+						tx_data_size <= {2'b0,ep00_total[7:0]}; // max packet bit width is 8 bits, it has to be smaller or equal to that
+						ep00_total <= 0;
+					end
+				end 
+				else if (rx_packet_endpoint == 4'd1) begin                                            
+                    if (ep81_valid) begin                                                          
+                        tx_packet_pid <= (ep81_data1 && !EP81_ISOCHRONOUS) ?`DATA1_PID: `DATA0_PID; // if ISOCHRONOUS, no data toggle and ACK
+                        tx_data_size <= EP81_MAXPACKETSIZE;                                            
+                    end                                                                         
+				end
+				else if (rx_packet_endpoint == 4'd2) begin                                            
+                    if (ep82_valid) begin                                                          
+                        tx_packet_pid <= (ep82_data1 && !EP81_ISOCHRONOUS) ?`DATA1_PID: `DATA0_PID; // if ISOCHRONOUS, no data toggle and ACK
+                        tx_data_size <= EP82_MAXPACKETSIZE;                                             
+                    end                                                                         
+				end
+				else if (rx_packet_endpoint == 4'd3) begin                                            
+                    if (ep83_valid) begin                                                          
+                        tx_packet_pid <= (ep83_data1 && !EP81_ISOCHRONOUS) ?`DATA1_PID: `DATA0_PID; // if ISOCHRONOUS, no data toggle and ACK
+                        tx_data_size <= EP83_MAXPACKETSIZE;                                            
+                    end                                                                         
+				end
+				else if (rx_packet_endpoint == 4'd4) begin                                            
+                    if (ep84_valid) begin                                                          
+                        tx_packet_pid <= (ep84_data1 && !EP81_ISOCHRONOUS) ?`DATA1_PID: `DATA0_PID; // if ISOCHRONOUS, no data toggle and ACK
+                        tx_data_size <= EP84_MAXPACKETSIZE;                                            
+                    end                                                                         
+				end
 			end
 			else if (rx_packet_pid == `DATA0_PID || rx_packet_pid == `DATA1_PID) begin
 				tx_packet_start <= 1'b1;                                                                      
             tx_packet_pid <= `ACK_PID;
 				if (endpoint == 0) begin // received in token packet, in data packet there is no EP
+					ep00_total <= 0; 
+					if (ep00_setup) begin  // in setup stage and should receive setup_cmd
+						if (ep00_setup_cmd[7])     // direction is IN                                                
+                            ep00_total <= ep00_setup_cmd[63:48]; //extract wLength(expected data bits)
+                        ep00_index <= 0; //reset to 0
+					end
 					if((ep00_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep00_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
-						ep00_data1 <= ~ ep00_data1;
+						ep00_data1 <= ~ep00_data1;
 					end
 					else begin
 						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
@@ -142,7 +199,7 @@ always@(posedge clk or negedge rst_n)
 						end
 					end
 					else if((ep01_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep01_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
-						ep01_data1 <= ~ ep01_data1;
+						ep01_data1 <= ~ep01_data1;
 					end
 					else begin
 						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
@@ -158,7 +215,7 @@ always@(posedge clk or negedge rst_n)
 						end
 					end
 					else if((ep02_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep02_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
-						ep02_data1 <= ~ ep02_data1;
+						ep02_data1 <= ~ep02_data1;
 					end
 					else begin
 						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
@@ -174,7 +231,7 @@ always@(posedge clk or negedge rst_n)
 						end
 					end
 					else if((ep03_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep03_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
-						ep03_data1 <= ~ ep03_data1;
+						ep03_data1 <= ~ep03_data1;
 					end
 					else begin
 						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
@@ -190,7 +247,7 @@ always@(posedge clk or negedge rst_n)
 						end
 					end
 					else if((ep04_data1 == 0 && rx_packet_pid == `DATA0_PID) || (ep04_data1 == 1 && rx_packet_pid == `DATA1_PID)) begin  // Matched, previous data is sent out correctly
-						ep04_data1 <= ~ ep04_data1;
+						ep04_data1 <= ~ep04_data1;
 					end
 					else begin
 						rx_data_repetitive <= 1; //Don't read the same data again, but still send the ACK because host may not receive that last time
